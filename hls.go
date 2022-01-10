@@ -3,6 +3,9 @@ package hls
 import (
 	"fmt"
 	"io"
+	"strings"
+
+	"github.com/Monibuca/utils/v3"
 )
 
 const (
@@ -93,6 +96,7 @@ func (this *Playlist) WriteInfN(filename string, inf PlaylistInf, n int) (err er
 
 	return
 }
+*/
 
 func (pl *Playlist) GetInfCount(filename string) (num int, err error) {
 	var ls []string
@@ -109,4 +113,3 @@ func (pl *Playlist) GetInfCount(filename string) (num int, err error) {
 
 	return
 }
-*/

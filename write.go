@@ -102,28 +102,14 @@ func writeHLS(r *Stream) {
 				tsSliceFilename := tsFileBase + "." + strconv.FormatUint(uint64(hls_segment_slice_count), 10) + ".ts"
 
 				tsData := hls_segment_slice_data.Bytes()
-				tsFilePath := filepath.Join(hls_path, tsSliceFilename)
+				tsFilePath := filepath.Join(filepath.Dir(hls_path), tsSliceFilename)
+				fmt.Println(tsFilePath)
+
 				if config.EnableWrite && len(tsData) > 0 {
 					if err = writeHlsTsSegmentFile(tsFilePath, tsData); err != nil {
 						return
 					}
 				}
-
-				// inf := PlaylistInf{
-				//      //浮点计算精度
-				//      Duration: float64((ts - vwrite_time) / 1000.0),
-				//      Title:    filepath.Base(hls_path) + "/" + tsFilename,
-				// }
-
-				// if hls_segment_count >= uint32(config.Window) {
-				//      if err = hls_playlist.UpdateInf(hls_m3u8_name, hls_m3u8_name+".tmp", inf); err != nil {
-				//              return
-				//      }
-				// } else {
-				//      if err = hls_playlist.WriteInf(hls_m3u8_name, inf); err != nil {
-				//              return
-				//      }
-				// }
 
 				// hls_segment_count++
 				hls_segment_slice_count++

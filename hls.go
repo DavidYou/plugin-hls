@@ -3,9 +3,6 @@ package hls
 import (
 	"fmt"
 	"io"
-	"strings"
-
-	"github.com/Monibuca/utils/v3"
 )
 
 const (
@@ -74,6 +71,29 @@ func (pl *Playlist) WriteInf(inf PlaylistInf) (err error) {
 	return
 }
 
+/*
+func (this *Playlist) WriteInfN(filename string, inf PlaylistInf, n int) (err error) {
+	defer this.handleError()
+
+	var file *os.File
+	file, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	for i := 0; i < n; i++ {
+		ss := fmt.Sprintf("#EXTINF:%.3f,\n"+"%s.%d.ts\n", inf.Duration/float64(n), inf.Title[:14], i)
+		if _, err = file.WriteString(ss); err != nil {
+			return
+		}
+	}
+
+	file.Close()
+
+	return
+}
+
 func (pl *Playlist) GetInfCount(filename string) (num int, err error) {
 	var ls []string
 	if ls, err = utils.ReadFileLines(filename); err != nil {
@@ -89,4 +109,4 @@ func (pl *Playlist) GetInfCount(filename string) (num int, err error) {
 
 	return
 }
-
+*/

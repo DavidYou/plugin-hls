@@ -60,12 +60,6 @@ func writeHLS(r *Stream) {
 		hls_fragment = 10000
 	}
 
-	hls_playlist := Playlist{
-		Writer:         &m3u8Buffer,
-		Version:        3,
-		Sequence:       0,
-		Targetduration: int(hls_fragment / 666), // hlsFragment * 1.5 / 1000
-	}
 	hls_path := filepath.Join(config.Path, r.StreamPath, fmt.Sprintf("%d.m3u8", time.Now().Unix()))
 	os.MkdirAll(filepath.Dir(hls_path), 0755)
 	var file *os.File
@@ -74,8 +68,14 @@ func writeHLS(r *Stream) {
 		return
 	}
 	defer file.Close()
-	record_playlist := Playlist{
+	hls_playlist := Playlist{
 		Writer:         file,
+		Version:        3,
+		Sequence:       0,
+		Targetduration: int(hls_fragment / 666), // hlsFragment * 1.5 / 1000
+	}
+	record_playlist := Playlist{
+		Writer:         &m3u8Buffer,
 		Version:        3,
 		Sequence:       0,
 		Targetduration: int(hls_fragment / 666), // hlsFragment * 1.5 / 1000
@@ -94,28 +94,24 @@ func writeHLS(r *Stream) {
 			return
 		}
 
-		if true { //pack.IDR {
-			// 当前的时间戳减去上一个ts切片的时间戳
-			if int64(ts-vwrite_slice_time) >= hls_fragment/6 || pack.IDR {
-				//fmt.Println("time :", video.Timestamp, tsSegmentTimestamp)
+		// 当前的时间戳减去上一个ts切片的时间戳
+		if int64(ts-vwrite_slice_time) >= hls_fragment || pack.IDR {
+			//fmt.Println("time :", video.Timestamp, tsSegmentTimestamp)
 
-				tsSliceFilename := tsFileBase + "." + strconv.FormatUint(uint64(hls_segment_slice_count), 10) + ".ts"
+			tsSliceFilename := tsFileBase + "." + strconv.FormatUint(uint64(hls_segment_slice_count), 10) + ".ts"
 
-				tsData := hls_segment_slice_data.Bytes()
-				tsFilePath := filepath.Join(filepath.Dir(hls_path), tsSliceFilename)
-				fmt.Println(tsFilePath)
+			tsData := hls_segment_slice_data.Bytes()
+			tsFilePath := filepath.Join(filepath.Dir(hls_path), tsSliceFilename)
 
-				if config.EnableWrite && len(tsData) > 0 {
-					if err = writeHlsTsSegmentFile(tsFilePath, tsData); err != nil {
-						return
-					}
+			if config.EnableWrite && len(tsData) > 0 {
+				if err = writeHlsTsSegmentFile(tsFilePath, tsData); err != nil {
+					return
 				}
-
-				// hls_segment_count++
-				hls_segment_slice_count++
-				vwrite_slice_time = ts
-				hls_segment_slice_data.Reset()
 			}
+
+			hls_segment_slice_count++
+			vwrite_slice_time = ts
+			hls_segment_slice_data.Reset()
 		}
 
 		if pack.IDR {
@@ -146,6 +142,7 @@ func writeHLS(r *Stream) {
 
 				if hls_segment_count >= uint32(config.Window) {
 					m3u8Buffer.Reset()
+					os.Truncate(hls_path, 0)
 					if err = hls_playlist.Init(); err != nil {
 						return
 					}

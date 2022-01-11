@@ -76,7 +76,6 @@ func (pl *Playlist) Init() (err error) {
 		6*pl.Targetduration, float32(3*pl.Segmentduration)+0.1, float32(pl.Segmentduration))
 
 	_, err = pl.Write([]byte(ss))
-	pl.Sequence++
 	return
 }
 

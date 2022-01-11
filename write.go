@@ -116,9 +116,11 @@ func writeHLS(r *Stream) {
 				Duration: float64((ts - vwrite_slice_time) / 1000.0),
 				Title:    tsSliceFilename,
 			}
-			if pack.IDR {
-				segInf.Independent = true
-			}
+			/*
+				if pack.IDR {
+					segInf.Independent = true
+				}
+			*/
 			if !strings.Contains(infoRing.Value.(PlaylistInf).FilePath, tsFileBase) {
 				inf := PlaylistInf{
 					//浮点计算精度
@@ -126,6 +128,7 @@ func writeHLS(r *Stream) {
 					FilePath: tsFileBase + ".ts",
 				}
 				infoRing.Value = inf
+				segInf.Independent = true
 			}
 			inf := infoRing.Value.(PlaylistInf)
 			inf.Segs = append(inf.Segs, segInf)
@@ -181,8 +184,9 @@ func writeHLS(r *Stream) {
 		}
 
 		if update {
-			os.Truncate(hls_path, 20)
+			os.Truncate(hls_path, 0)
 			file.Seek(0, 0)
+
 			//Write to m3u8
 			if err = hls_playlist.Init(); err != nil {
 				return
@@ -191,6 +195,9 @@ func writeHLS(r *Stream) {
 			printRing := infoRing
 			if infoRing.Value.(PlaylistInf).Duration == 0 {
 				printRing = printRing.Next()
+			} else {
+				//Add sequence
+				hls_playlist.Sequence++
 			}
 
 			printRing.Do(func(i interface{}) {

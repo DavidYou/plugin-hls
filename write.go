@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"container/ring"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +28,13 @@ func writeHLS(r *Stream) {
 	}
 	var m3u8Buffer bytes.Buffer
 	var infoRing = ring.New(config.Window)
+	for i := 0; i < infoRing.Len(); i++ {
+		inf := PlaylistInf{
+			Duration: 0,
+		}
+		infoRing.Value = inf
+		infoRing = infoRing.Next()
+	}
 
 	memoryM3u8.Store(r.StreamPath, &m3u8Buffer)
 	defer memoryM3u8.Delete(r.StreamPath)
@@ -69,21 +78,13 @@ func writeHLS(r *Stream) {
 	}
 	defer file.Close()
 	hls_playlist := Playlist{
-		Writer:         file,
-		Version:        3,
-		Sequence:       0,
-		Targetduration: int(hls_fragment / 666), // hlsFragment * 1.5 / 1000
-	}
-	record_playlist := Playlist{
-		Writer:         &m3u8Buffer,
-		Version:        3,
-		Sequence:       0,
-		Targetduration: int(hls_fragment / 666), // hlsFragment * 1.5 / 1000
+		Writer:          file,
+		Version:         6,
+		Sequence:        0,
+		Targetduration:  int(hls_fragment / 666), // hlsFragment * 1.5 / 1000
+		Segmentduration: int(hls_fragment / 1000),
 	}
 	if err = hls_playlist.Init(); err != nil {
-		return
-	}
-	if err = record_playlist.Init(); err != nil {
 		return
 	}
 	hls_segment_data := &bytes.Buffer{}
@@ -93,6 +94,8 @@ func writeHLS(r *Stream) {
 		if err != nil {
 			return
 		}
+
+		var update = false
 
 		// 当前的时间戳减去上一个ts切片的时间戳
 		if int64(ts-vwrite_slice_time) >= hls_fragment || pack.IDR {
@@ -109,9 +112,29 @@ func writeHLS(r *Stream) {
 				}
 			}
 
+			segInf := SegmentInf{
+				Duration: float64((ts - vwrite_slice_time) / 1000.0),
+				Title:    tsSliceFilename,
+			}
+			if pack.IDR {
+				segInf.Independent = true
+			}
+			if !strings.Contains(infoRing.Value.(PlaylistInf).FilePath, tsFileBase) {
+				inf := PlaylistInf{
+					//浮点计算精度
+					Duration: 0,
+					FilePath: tsFileBase + ".ts",
+				}
+				infoRing.Value = inf
+			}
+			inf := infoRing.Value.(PlaylistInf)
+			inf.Segs = append(inf.Segs, segInf)
+			infoRing.Value = inf
+
 			hls_segment_slice_count++
 			vwrite_slice_time = ts
 			hls_segment_slice_data.Reset()
+			update = true
 		}
 
 		if pack.IDR {
@@ -120,7 +143,6 @@ func writeHLS(r *Stream) {
 				//fmt.Println("time :", video.Timestamp, tsSegmentTimestamp)
 
 				//tsFilename := strconv.FormatInt(time.Now().Unix(), 10) + ".ts"
-				tsFileBase = strconv.FormatInt(time.Now().Unix(), 10)
 				tsFilename := tsFileBase + ".ts"
 
 				tsData := hls_segment_data.Bytes()
@@ -133,41 +155,47 @@ func writeHLS(r *Stream) {
 				if config.EnableMemory {
 					memoryTs.Store(tsFilePath, tsData)
 				}
-				inf := PlaylistInf{
-					//浮点计算精度
-					Duration: float64((ts - vwrite_time) / 1000.0),
-					Title:    filepath.Base(filepath.Dir(hls_path)) + "/" + tsFilename,
-					FilePath: tsFilePath,
-				}
 
 				if hls_segment_count >= uint32(config.Window) {
 					m3u8Buffer.Reset()
-					os.Truncate(hls_path, 0)
-					if err = hls_playlist.Init(); err != nil {
-						return
-					}
 					memoryTs.Delete(infoRing.Value.(PlaylistInf).FilePath)
-					infoRing.Value = inf
-					infoRing = infoRing.Next()
-					infoRing.Do(func(i interface{}) {
-						hls_playlist.WriteInf(i.(PlaylistInf))
-					})
-				} else {
-					infoRing.Value = inf
-					infoRing = infoRing.Next()
-					if err = hls_playlist.WriteInf(inf); err != nil {
-						return
-					}
 				}
+				inf := infoRing.Value.(PlaylistInf)
 				inf.Title = tsFilename
-				if err = record_playlist.WriteInf(inf); err != nil {
-					return
-				}
+				inf.Duration = float64((ts - vwrite_time) / 1000.0)
+				infoRing.Value = inf
+
+				//Switch next ring
+				infoRing = infoRing.Next()
+
+				hls_playlist.Targetduration = int(math.Ceil(float64(ts-vwrite_time) / 1000))
+
 				hls_segment_count++
 				vwrite_time = ts
 				hls_segment_data.Reset()
 				hls_segment_slice_count = 0
+
+				update = true
 			}
+			tsFileBase = strconv.FormatInt(time.Now().Unix(), 10)
+		}
+
+		if update {
+			os.Truncate(hls_path, 20)
+			file.Seek(0, 0)
+			//Write to m3u8
+			if err = hls_playlist.Init(); err != nil {
+				return
+			}
+
+			printRing := infoRing
+			if infoRing.Value.(PlaylistInf).Duration == 0 {
+				printRing = printRing.Next()
+			}
+
+			printRing.Do(func(i interface{}) {
+				hls_playlist.WriteInf(i.(PlaylistInf))
+			})
 		}
 
 		frame := new(mpegts.MpegtsPESFrame)

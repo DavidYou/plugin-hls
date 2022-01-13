@@ -21,7 +21,7 @@ type Playlist struct {
 	Version         int         // indicates the compatibility version of the Playlist file. (4.3.1.2) -- 协议版本号.
 	Sequence        int         // indicates the Media Sequence Number of the first Media Segment that appears in a Playlist file. (4.3.3.2) -- 第一个媒体段的序列号.
 	Targetduration  int         // specifies the maximum Media Segment duration. (4.3.3.1) -- 每个视频分段最大的时长(单位秒).
-	Segmentduration int         // specifies the segment duration
+	Segmentduration float32     // specifies the segment duration
 	PlaylistType    int         // rovides mutability information about the Media Playlist file. (4.3.3.5) -- 提供关于PlayList的可变性的信息.
 	Discontinuity   int         // indicates a discontinuity between theMedia Segment that follows it and the one that preceded it. (4.3.2.3) -- 该标签后边的媒体文件和之前的媒体文件之间的编码不连贯(即发生改变)(场景用于插播广告等等).
 	Key             PlaylistKey // specifies how to decrypt them. (4.3.2.4) -- 解密媒体文件的必要信息(表示怎么对media segments进行解码).
@@ -49,10 +49,11 @@ type SegmentInf struct {
 }
 
 type PlaylistInf struct {
-	Duration float64
-	Title    string
-	FilePath string
-	Segs     []SegmentInf
+	Duration    float64
+	Title       string
+	FilePath    string
+	Segs        []SegmentInf
+	ProgramTime string
 }
 
 func (pl *Playlist) Init() (err error) {
@@ -70,24 +71,26 @@ func (pl *Playlist) Init() (err error) {
 		"#EXT-X-MEDIA-SEQUENCE:%d\n"+
 		"#EXT-X-TARGETDURATION:%d\n"+
 		"#EXT-X-INDEPENDENT-SEGMENTS\n"+
-		"#EXT-X-SERVER-CONTROL:CAN-SKIP-UNTIL=%d,PART-HOLD-BACK=%.3f\n"+
+		"#EXT-X-SERVER-CONTROL:PART-HOLD-BACK=%.3f\n"+
 		"#EXT-X-PART-INF:PART-TARGET=%.3f\n",
 		pl.Version, pl.Sequence, pl.Targetduration,
-		6*pl.Targetduration, float32(3*pl.Segmentduration)+0.1, float32(pl.Segmentduration))
+		float32(3*pl.Segmentduration)+0.1, float32(pl.Segmentduration))
 
 	_, err = pl.Write([]byte(ss))
 	return
 }
 
 func (pl *Playlist) WriteInf(inf PlaylistInf) (err error) {
-	var i int
-	for i = 0; i < len(inf.Segs); i++ {
+	for i := 0; i < len(inf.Segs); i++ {
+		if len(inf.ProgramTime) != 0 && i == 0 {
+			ss := fmt.Sprintf("#EXT-X-PROGRAM-DATE-TIME:%s\n", inf.ProgramTime)
+			_, err = pl.Write([]byte(ss))
+		}
 		pl.WriteInfN(inf.Segs[i])
 	}
 
 	if inf.Duration != 0 {
-		ss := fmt.Sprintf("#EXTINF:%.3f,\n"+
-			"%s\n", inf.Duration, inf.Title)
+		ss := fmt.Sprintf("#EXTINF:%.3f,\n%s\n", inf.Duration, inf.Title)
 		_, err = pl.Write([]byte(ss))
 	}
 	return

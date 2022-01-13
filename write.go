@@ -82,7 +82,7 @@ func writeHLS(r *Stream) {
 		Version:         6,
 		Sequence:        0,
 		Targetduration:  int(hls_fragment / 666), // hlsFragment * 1.5 / 1000
-		Segmentduration: int(hls_fragment / 1000),
+		Segmentduration: (float32)(hls_fragment) / 2000,
 	}
 	if err = hls_playlist.Init(); err != nil {
 		return
@@ -98,8 +98,8 @@ func writeHLS(r *Stream) {
 		var update = false
 
 		// 当前的时间戳减去上一个ts切片的时间戳
-		if int64(ts-vwrite_slice_time) >= hls_fragment || pack.IDR {
-			//fmt.Println("time :", video.Timestamp, tsSegmentTimestamp)
+		if int64(ts-vwrite_slice_time) >= int64(hls_playlist.Segmentduration*1000) || pack.IDR {
+			//fmt.Println("time :", video.Timestampayy, tsSegmentTimestamp)
 
 			tsSliceFilename := tsFileBase + "." + strconv.FormatUint(uint64(hls_segment_slice_count), 10) + ".ts"
 
@@ -113,7 +113,7 @@ func writeHLS(r *Stream) {
 			}
 
 			segInf := SegmentInf{
-				Duration: float64((ts - vwrite_slice_time) / 1000.0),
+				Duration: float64(ts-vwrite_slice_time) / 1000.0,
 				Title:    tsSliceFilename,
 			}
 			/*
@@ -124,8 +124,9 @@ func writeHLS(r *Stream) {
 			if !strings.Contains(infoRing.Value.(PlaylistInf).FilePath, tsFileBase) {
 				inf := PlaylistInf{
 					//浮点计算精度
-					Duration: 0,
-					FilePath: tsFileBase + ".ts",
+					Duration:    0,
+					FilePath:    tsFileBase + ".ts",
+					ProgramTime: time.Now().UTC().Format("2006-01-02T15:04:05.000+00:00"),
 				}
 				infoRing.Value = inf
 				segInf.Independent = true
